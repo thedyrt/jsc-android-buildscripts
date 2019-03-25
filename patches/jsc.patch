@@ -4,7 +4,7 @@ diff -aur target-org/webkit/CMakeLists.txt target/webkit/CMakeLists.txt
 @@ -170,13 +170,13 @@
      add_subdirectory(Tools)
  endif ()
- 
+
 -if ("${PORT}" STREQUAL "GTK" OR "${PORT}" STREQUAL "WPE")
 -    if (DEVELOPER_MODE)
 -        add_subdirectory(PerformanceTests)
@@ -19,7 +19,7 @@ diff -aur target-org/webkit/CMakeLists.txt target/webkit/CMakeLists.txt
 +#else ()
 +#    add_subdirectory(PerformanceTests)
 +#endif ()
- 
+
  # -----------------------------------------------------------------------------
  # Print the features list last, for maximum visibility.
 diff -aur target-org/webkit/Source/bmalloc/bmalloc/DebugHeap.cpp target/webkit/Source/bmalloc/bmalloc/DebugHeap.cpp
@@ -120,9 +120,9 @@ diff -aur target-org/webkit/Source/WTF/wtf/unix/LanguageUnix.cpp target/webkit/S
  #include <wtf/Vector.h>
  #include <wtf/text/WTFString.h>
 +#include <sys/system_properties.h>
- 
+
  namespace WTF {
- 
+
 -// Using pango_language_get_default() here is not an option, because
 -// it doesn't support changing the locale in runtime, so it returns
 -// always the same value.
@@ -218,7 +218,7 @@ diff -aur target-org/webkit/Source/cmake/FindICU.cmake target/webkit/Source/cmak
 +    HINTS ${WEBKIT_LIBRARIES_INCLUDE_DIR}
      DOC "Include directory for the ICU library")
  mark_as_advanced(ICU_INCLUDE_DIR)
- 
+
  # Look for the library.
  find_library(
      ICU_LIBRARY
@@ -230,7 +230,7 @@ diff -aur target-org/webkit/Source/cmake/FindICU.cmake target/webkit/Source/cmak
 +    HINTS ${WEBKIT_LIBRARIES_LINK_DIR}
      DOC "Libraries to link against for the common parts of ICU")
  mark_as_advanced(ICU_LIBRARY)
- 
+
 @@ -51,10 +47,8 @@
      pkg_check_modules(PC_ICU_I18N icu-i18n)
      find_library(
@@ -267,7 +267,7 @@ diff -aur target-org/webkit/Source/JavaScriptCore/CMakeLists.txt target/webkit/S
 +    ${ICU_LIBRARIES}
 +    ${ICU_DATA_LIBRARIES}
  )
- 
+
 diff -aur target-org/webkit/Source/JavaScriptCore/API/JSBase.cpp target/webkit/Source/JavaScriptCore/API/JSBase.cpp
 --- target-org/webkit/Source/JavaScriptCore/API/JSBase.cpp	2017-05-05 02:37:52.000000000 +0300
 +++ target/webkit/Source/JavaScriptCore/API/JSBase.cpp	2018-10-09 14:38:30.000000000 +0300
@@ -331,3 +331,21 @@ diff -aur /dev/null target/webkit/Source/JavaScriptCore/polyfills/log2.cpp
 +  return log(x) / log(2.0);
 +}
 +#endif
+diff -aur target-org/webkit/Source/WTF/wtf/Optional.h target/webkit/Source/WTF/wtf/Optional.h
+--- target-org/webkit/Source/WTF/wtf/Optional.h	2019-03-20 20:49:36.000000000 +0800
++++ target/webkit/Source/WTF/wtf/Optional.h	2019-03-20 20:52:01.000000000 +0800
+@@ -277,12 +277,14 @@
+ constexpr nullopt_t nullopt{nullopt_t::init()};
+
+
++#if !defined(_LIBCPP_VERSION) || _LIBCPP_VERSION < 7000
+ // 20.5.8, class bad_optional_access
+ class bad_optional_access : public std::logic_error {
+ public:
+   explicit bad_optional_access(const std::string& what_arg) : std::logic_error{what_arg} {}
+   explicit bad_optional_access(const char* what_arg) : std::logic_error{what_arg} {}
+ };
++#endif
+
+
+ template <class T>

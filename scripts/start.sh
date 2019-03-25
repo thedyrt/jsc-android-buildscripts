@@ -20,7 +20,7 @@ patchAndMakeICU() {
   rm -rf $TARGETDIR/icu/host
   mkdir -p $TARGETDIR/icu/host
   cd $TARGETDIR/icu/host
-  
+
   $TARGETDIR/icu/source/runConfigureICU Linux \
   --prefix=$PWD/prebuilts \
   CFLAGS="-Os" \
@@ -53,7 +53,7 @@ prep() {
   printf "\n\n\t\t===================== copy downloaded sources =====================\n\n"
   rm -rf $TARGETDIR
   cp -Rf $ROOTDIR/build/download $TARGETDIR
-  
+
   patchAndMakeICU
   patchJsc
   # origs=$(find $ROOTDIR/build/target -name "*.orig")
