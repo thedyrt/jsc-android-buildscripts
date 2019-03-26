@@ -1,0 +1,315 @@
+diff -aur target-org/webkit/CMakeLists.txt target/webkit/CMakeLists.txt
+--- target-org/webkit/CMakeLists.txt	2019-03-26 11:25:08.000000000 +0800
++++ target/webkit/CMakeLists.txt	2019-03-26 11:30:34.000000000 +0800
+@@ -174,13 +174,13 @@
+     add_subdirectory(Tools)
+ endif ()
+ 
+-if ("${PORT}" STREQUAL "GTK" OR "${PORT}" STREQUAL "WPE")
+-    if (DEVELOPER_MODE)
+-        add_subdirectory(PerformanceTests)
+-    endif ()
+-else ()
+-    add_subdirectory(PerformanceTests)
+-endif ()
++#if ("${PORT}" STREQUAL "GTK" OR "${PORT}" STREQUAL "WPE")
++#    if (DEVELOPER_MODE)
++#        add_subdirectory(PerformanceTests)
++#    endif ()
++#else ()
++#    add_subdirectory(PerformanceTests)
++#endif ()
+ 
+ # -----------------------------------------------------------------------------
+ # Print the features list last, for maximum visibility.
+Only in target/webkit: CMakeLists.txt.orig
+diff -aur target-org/webkit/Source/JavaScriptCore/API/JSBase.cpp target/webkit/Source/JavaScriptCore/API/JSBase.cpp
+--- target-org/webkit/Source/JavaScriptCore/API/JSBase.cpp	2019-03-26 11:25:14.000000000 +0800
++++ target/webkit/Source/JavaScriptCore/API/JSBase.cpp	2019-03-26 11:30:34.000000000 +0800
+@@ -197,3 +197,9 @@
+ const char iosInstallName60 = 0;
+ const char iosInstallName61 = 0;
+ #endif
++
++extern "C" int __android_log_print(int prio, const char *tag, const char *fmt, ...);
++__attribute__((constructor))
++void printVersion() {
++    __android_log_print(3, "JavaScriptCore.Version", "%s", JSC_VERSION);
++}
+Only in target/webkit/Source/JavaScriptCore/API: JSBase.cpp.orig
+diff -aur target-org/webkit/Source/JavaScriptCore/CMakeLists.txt target/webkit/Source/JavaScriptCore/CMakeLists.txt
+--- target-org/webkit/Source/JavaScriptCore/CMakeLists.txt	2019-03-26 11:25:12.000000000 +0800
++++ target/webkit/Source/JavaScriptCore/CMakeLists.txt	2019-03-26 11:30:34.000000000 +0800
+@@ -118,7 +118,11 @@
+ set(JavaScriptCore_LIBRARIES
+     WTF${DEBUG_SUFFIX}
+     ${ICU_I18N_LIBRARIES}
++    ${ICU_LIBRARIES}
++    ${ICU_DATA_LIBRARIES}
++    log
+ )
++add_definitions(-DJSC_VERSION="${JSC_VERSION}")
+ 
+ if (USE_CAPSTONE)
+     list(APPEND JavaScriptCore_LIBRARIES capstone)
+@@ -1221,7 +1225,7 @@
+ )
+ target_include_directories(LLIntOffsetsExtractor SYSTEM PRIVATE ${JavaScriptCore_SYSTEM_INCLUDE_DIRECTORIES})
+ 
+-add_subdirectory(shell)
++# add_subdirectory(shell)
+ 
+ WEBKIT_COMPUTE_SOURCES(JavaScriptCore)
+ WEBKIT_WRAP_SOURCELIST(${JavaScriptCore_SOURCES})
+@@ -1234,6 +1238,7 @@
+         install(TARGETS JavaScriptCore DESTINATION "${LIB_INSTALL_DIR}")
+     endif ()
+ endif ()
++set_target_properties(JavaScriptCore PROPERTIES OUTPUT_NAME jsc)
+ 
+ # Force staging of shared scripts, even if they aren't directly used to build JavaScriptCore.
+ 
+Only in target/webkit/Source/JavaScriptCore: CMakeLists.txt.orig
+diff -aur target-org/webkit/Source/JavaScriptCore/Sources.txt target/webkit/Source/JavaScriptCore/Sources.txt
+--- target-org/webkit/Source/JavaScriptCore/Sources.txt	2019-03-26 11:25:13.000000000 +0800
++++ target/webkit/Source/JavaScriptCore/Sources.txt	2019-03-26 11:30:34.000000000 +0800
+@@ -1045,3 +1045,6 @@
+ 
+ // Derived Sources
+ yarr/YarrCanonicalizeUnicode.cpp
++
++// Polyfills
++polyfills/log2.cpp
+Only in target/webkit/Source/JavaScriptCore: Sources.txt.orig
+Only in target/webkit/Source/JavaScriptCore: polyfills
+diff -aur target-org/webkit/Source/WTF/wtf/CMakeLists.txt target/webkit/Source/WTF/wtf/CMakeLists.txt
+--- target-org/webkit/Source/WTF/wtf/CMakeLists.txt	2019-03-26 11:25:32.000000000 +0800
++++ target/webkit/Source/WTF/wtf/CMakeLists.txt	2019-03-26 11:30:34.000000000 +0800
+@@ -475,7 +475,6 @@
+ list(APPEND WTF_SOURCES
+     unicode/CollatorDefault.cpp
+ 
+-    unicode/icu/CollatorICU.cpp
+ )
+ set(WTF_SYSTEM_INCLUDE_DIRECTORIES
+     ${ICU_INCLUDE_DIRS}
+Only in target/webkit/Source/WTF/wtf: CMakeLists.txt.orig
+diff -aur target-org/webkit/Source/WTF/wtf/Optional.h target/webkit/Source/WTF/wtf/Optional.h
+--- target-org/webkit/Source/WTF/wtf/Optional.h	2019-03-26 11:25:33.000000000 +0800
++++ target/webkit/Source/WTF/wtf/Optional.h	2019-03-26 11:30:34.000000000 +0800
+@@ -277,12 +277,14 @@
+ constexpr nullopt_t nullopt{nullopt_t::init()};
+ 
+ 
++#if !defined(_LIBCPP_VERSION) || _LIBCPP_VERSION < 7000
+ // 20.5.8, class bad_optional_access
+ class bad_optional_access : public std::logic_error {
+ public:
+   explicit bad_optional_access(const std::string& what_arg) : std::logic_error{what_arg} {}
+   explicit bad_optional_access(const char* what_arg) : std::logic_error{what_arg} {}
+ };
++#endif
+ 
+ 
+ template <class T>
+diff -aur target-org/webkit/Source/WTF/wtf/StackTrace.cpp target/webkit/Source/WTF/wtf/StackTrace.cpp
+--- target-org/webkit/Source/WTF/wtf/StackTrace.cpp	2019-03-26 11:25:33.000000000 +0800
++++ target/webkit/Source/WTF/wtf/StackTrace.cpp	2019-03-26 11:30:34.000000000 +0800
+@@ -30,10 +30,6 @@
+ #include <wtf/Assertions.h>
+ #include <wtf/PrintStream.h>
+ 
+-#if HAVE(BACKTRACE_SYMBOLS) || HAVE(BACKTRACE)
+-#include <execinfo.h>
+-#endif
+-
+ #if HAVE(DLADDR)
+ #include <cxxabi.h>
+ #include <dlfcn.h>
+diff -aur target-org/webkit/Source/WTF/wtf/linux/MemoryFootprintLinux.cpp target/webkit/Source/WTF/wtf/linux/MemoryFootprintLinux.cpp
+--- target-org/webkit/Source/WTF/wtf/linux/MemoryFootprintLinux.cpp	2019-03-26 11:25:33.000000000 +0800
++++ target/webkit/Source/WTF/wtf/linux/MemoryFootprintLinux.cpp	2019-03-26 11:30:34.000000000 +0800
+@@ -23,6 +23,10 @@
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++// CUSTOMIZE_REACT_NATIVE: getline() does not implemented until Android NDK API 18.
++// Since MemoryFootprint does not being used in JSC, comment out to prevent build break.
++#if !defined(CUSTOMIZE_REACT_NATIVE)
++
+ #include "config.h"
+ #include "MemoryFootprint.h"
+ 
+@@ -107,3 +111,4 @@
+ }
+ 
+ }
++#endif // !defined(CUSTOMIZE_REACT_NATIVE)
+diff -aur target-org/webkit/Source/WTF/wtf/unicode/CollatorDefault.cpp target/webkit/Source/WTF/wtf/unicode/CollatorDefault.cpp
+--- target-org/webkit/Source/WTF/wtf/unicode/CollatorDefault.cpp	2019-03-26 11:25:32.000000000 +0800
++++ target/webkit/Source/WTF/wtf/unicode/CollatorDefault.cpp	2019-03-26 11:30:34.000000000 +0800
+@@ -28,12 +28,13 @@
+ 
+ #include "config.h"
+ #include "Collator.h"
++#include <StringView.h>
+ 
+ #if UCONFIG_NO_COLLATION
+ 
+ namespace WTF {
+ 
+-int Collator::collate(StringView a, StringView b) const
++int Collator::collate(StringView a, StringView b)
+ {
+     unsigned commonLength = std::min(a.length(), b.length());
+     for (unsigned i = 0; i < commonLength; ++i) {
+@@ -51,7 +52,7 @@
+     return 0;
+ }
+ 
+-int Collator::collateUTF8(const char* a, const char* b) const
++int Collator::collateUTF8(const char* a, const char* b)
+ {
+     return collate(String::fromUTF8(a), String::fromUTF8(b));
+ }
+diff -aur target-org/webkit/Source/WTF/wtf/unix/LanguageUnix.cpp target/webkit/Source/WTF/wtf/unix/LanguageUnix.cpp
+--- target-org/webkit/Source/WTF/wtf/unix/LanguageUnix.cpp	2019-03-26 11:25:33.000000000 +0800
++++ target/webkit/Source/WTF/wtf/unix/LanguageUnix.cpp	2019-03-26 11:30:34.000000000 +0800
+@@ -24,22 +24,27 @@
+ #include <locale.h>
+ #include <wtf/Vector.h>
+ #include <wtf/text/WTFString.h>
++#include <sys/system_properties.h>
+ 
+ namespace WTF {
+ 
+-// Using pango_language_get_default() here is not an option, because
+-// it doesn't support changing the locale in runtime, so it returns
+-// always the same value.
+ static String platformLanguage()
+ {
+-    String localeDefault(setlocale(LC_CTYPE, nullptr));
+-    if (localeDefault.isEmpty() || equalIgnoringASCIICase(localeDefault, "C") || equalIgnoringASCIICase(localeDefault, "POSIX"))
++    char buf[2 * (PROP_VALUE_MAX + 1)];
++
++    int locale_len = __system_property_get("persist.sys.locale", buf);
++    if (locale_len == 0) {
++      int lang_len = __system_property_get("persist.sys.language", buf);
++      if(lang_len == 0) {
+         return "en-US"_s;
++      }
++      int country_len = __system_property_get("persist.sys.country", buf + lang_len + 1);
++      if(country_len != 0) {
++        buf[lang_len] = '-';
++      }
++    }
+ 
+-    String normalizedDefault = localeDefault;
+-    normalizedDefault.replace('_', '-');
+-    normalizedDefault.truncate(normalizedDefault.find('.'));
+-    return normalizedDefault;
++    return String(buf);
+ }
+ 
+ Vector<String> platformUserPreferredLanguages()
+diff -aur target-org/webkit/Source/bmalloc/bmalloc/DebugHeap.cpp target/webkit/Source/bmalloc/bmalloc/DebugHeap.cpp
+--- target-org/webkit/Source/bmalloc/bmalloc/DebugHeap.cpp	2019-03-26 11:25:17.000000000 +0800
++++ target/webkit/Source/bmalloc/bmalloc/DebugHeap.cpp	2019-03-26 11:30:34.000000000 +0800
+@@ -89,13 +89,8 @@
+ 
+ void* DebugHeap::memalign(size_t alignment, size_t size, bool crashOnFailure)
+ {
+-    void* result;
+-    if (posix_memalign(&result, alignment, size)) {
+-        if (crashOnFailure)
+-            BCRASH();
+-        return nullptr;
+-    }
+-    return result;
++    BCRASH();
++    return nullptr;
+ }
+ 
+ void* DebugHeap::realloc(void* object, size_t size)
+Only in target/webkit/Source/bmalloc/bmalloc: DebugHeap.cpp.orig
+diff -aur target-org/webkit/Source/cmake/FindICU.cmake target/webkit/Source/cmake/FindICU.cmake
+--- target-org/webkit/Source/cmake/FindICU.cmake	2019-03-26 11:25:17.000000000 +0800
++++ target/webkit/Source/cmake/FindICU.cmake	2019-03-26 11:30:34.000000000 +0800
+@@ -16,19 +16,15 @@
+ find_path(
+     ICU_INCLUDE_DIR
+     NAMES unicode/utypes.h
+-    HINTS ${PC_ICU_INCLUDE_DIRS}
+-          ${PC_ICU_INCLUDEDIR}
+-          ${WEBKIT_LIBRARIES_INCLUDE_DIR}
++    HINTS ${WEBKIT_LIBRARIES_INCLUDE_DIR}
+     DOC "Include directory for the ICU library")
+ mark_as_advanced(ICU_INCLUDE_DIR)
+ 
+ # Look for the library.
+ find_library(
+     ICU_LIBRARY
+-    NAMES libicuuc cygicuuc cygicuuc32 icuuc
+-    HINTS ${PC_ICU_LIBRARY_DIRS}
+-          ${PC_ICU_LIBDIR}
+-          ${WEBKIT_LIBRARIES_LINK_DIR}
++    NAMES icuuc_jsc
++    HINTS ${WEBKIT_LIBRARIES_LINK_DIR}
+     DOC "Libraries to link against for the common parts of ICU")
+ mark_as_advanced(ICU_LIBRARY)
+ 
+@@ -51,10 +47,8 @@
+     pkg_check_modules(PC_ICU_I18N icu-i18n)
+     find_library(
+         ICU_I18N_LIBRARY
+-        NAMES icui18n libicui18n libicuin cygicuin cygicuin32 icuin
+-        HINTS ${PC_ICU_I18N_LIBRARY_DIRS}
+-              ${PC_ICU_I18N_LIBDIR}
+-              ${WEBKIT_LIBRARIES_LINK_DIR}
++        NAMES icui18n_jsc
++        HINTS ${WEBKIT_LIBRARIES_LINK_DIR}
+         DOC "Libraries to link against for ICU internationalization")
+     mark_as_advanced(ICU_I18N_LIBRARY)
+     if (ICU_I18N_LIBRARY)
+@@ -68,10 +62,8 @@
+     # Look for the ICU data libraries
+     find_library(
+         ICU_DATA_LIBRARY
+-        NAMES icudata libicudata cygicudata cygicudata32
+-        HINTS ${PC_ICU_I18N_LIBRARY_DIRS}
+-              ${PC_ICU_I18N_LIBDIR}
+-              ${WEBKIT_LIBRARIES_LINK_DIR}
++        NAMES icudata_jsc
++        HINTS ${WEBKIT_LIBRARIES_LINK_DIR}
+         DOC "Libraries to link against for ICU data")
+     mark_as_advanced(ICU_DATA_LIBRARY)
+     if (ICU_DATA_LIBRARY)
+diff -aur target-org/webkit/Source/cmake/OptionsCommon.cmake target/webkit/Source/cmake/OptionsCommon.cmake
+--- target-org/webkit/Source/cmake/OptionsCommon.cmake	2019-03-26 11:25:17.000000000 +0800
++++ target/webkit/Source/cmake/OptionsCommon.cmake	2019-03-26 11:30:34.000000000 +0800
+@@ -115,7 +115,7 @@
+ 
+ # Check for headers
+ WEBKIT_CHECK_HAVE_INCLUDE(HAVE_ERRNO_H errno.h)
+-WEBKIT_CHECK_HAVE_INCLUDE(HAVE_LANGINFO_H langinfo.h)
++#WEBKIT_CHECK_HAVE_INCLUDE(HAVE_LANGINFO_H langinfo.h)
+ WEBKIT_CHECK_HAVE_INCLUDE(HAVE_MMAP sys/mman.h)
+ WEBKIT_CHECK_HAVE_INCLUDE(HAVE_PTHREAD_NP_H pthread_np.h)
+ WEBKIT_CHECK_HAVE_INCLUDE(HAVE_STRINGS_H strings.h)
+diff -aur target-org/webkit/Source/cmake/OptionsJSCOnly.cmake target/webkit/Source/cmake/OptionsJSCOnly.cmake
+--- target-org/webkit/Source/cmake/OptionsJSCOnly.cmake	2019-03-26 11:25:17.000000000 +0800
++++ target/webkit/Source/cmake/OptionsJSCOnly.cmake	2019-03-26 11:30:34.000000000 +0800
+@@ -35,12 +35,7 @@
+ set(ENABLE_WEBCORE OFF)
+ set(ENABLE_WEBKIT_LEGACY OFF)
+ set(ENABLE_WEBKIT OFF)
+-
+-if (WIN32)
+-    set(ENABLE_API_TESTS OFF)
+-else ()
+-    set(ENABLE_API_TESTS ON)
+-endif ()
++set(ENABLE_API_TESTS OFF)
+ 
+ if (WTF_CPU_ARM OR WTF_CPU_MIPS)
+     SET_AND_EXPOSE_TO_BUILD(USE_CAPSTONE TRUE)
